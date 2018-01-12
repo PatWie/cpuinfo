@@ -4,7 +4,7 @@
 
 #define MAX_NAME 128
 
-
+// read total cpu time
 unsigned long long int read_cpu_tick() {
   unsigned long long int usertime, nicetime, systemtime, idletime;
   unsigned long long int ioWait, irq, softIrq, steal, guest, guestnice;
@@ -28,8 +28,11 @@ unsigned long long int read_cpu_tick() {
   }
 }
 
+// read cpu tick for a specific process
 unsigned long read_time_from_pid(int pid) {
+
   char fn[MAX_NAME + 1];
+  char name[MAX_NAME + 1];
   snprintf(fn, sizeof fn, "/proc/%i/stat", pid);
 
   unsigned long utime = 0;
@@ -38,14 +41,15 @@ unsigned long read_time_from_pid(int pid) {
   FILE *fp;
   fp = fopen(fn, "r");
   if (fp != NULL) {
-    bool ans = fscanf(fp, "%*d %*s %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu"
+    bool ans = fscanf(fp, "%*d %s %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu"
                       "%lu %*ld %*ld %*d %*d %*d %*d %*u %*lu %*ld",
-                      &utime, &stime) != EOF;
+                      name, &utime, &stime) != EOF;
     if (!ans) {
       fclose(fp);
       return 0;
     } else {
       fclose(fp);
+      // printf("%s\n", name);
       return utime + stime;
     }
   } else {
@@ -53,6 +57,7 @@ unsigned long read_time_from_pid(int pid) {
   }
 }
 
+// return number of cores
 unsigned int num_cores(){
   return sysconf(_SC_NPROCESSORS_ONLN);
 }

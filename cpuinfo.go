@@ -3,73 +3,49 @@ package main
 import (
   "github.com/patwie/cpuinfo/proc"
   "fmt"
-  "io/ioutil"
-  "strconv"
   "time"
+  "sort"
 )
 
-type Process struct{
-  Pid       int
-  TimePrev int64
-  TimeCur  int64
-  Dirty     bool
-}
+// hash map of all processes
+var m map[int]*proc.Process
 
+func DisplayProcessList(procs map[int]*proc.Process, factor float32, max int){
 
-var m map[int]*Process
+  var m_display []proc.Process
 
-func UpdateProcessList(procs map[int]*Process){
-  files, err := ioutil.ReadDir("/proc")
-  if err != nil {
-    panic(err)
-  }
-
-  for _, file := range files {
-    // list all possible directories
-    name := file.Name()
-    // we are just interested in numerical names
-    if (name[0] < '0' || name[0] > '9') {
-      continue;
-    }
-    // get pid
-    pid, err := strconv.Atoi(name)
-    if err != nil{
-      continue
-    }
-
-    p := procs[pid]
-    if p == nil{
-      // is a new process
-      p = &Process{pid, 0, 0, true}
-    }else{
-      // just update
-      p.Dirty = false
-      p.TimePrev = p.TimeCur
-    }
-
-    p.TimeCur = proc.TimeFromPid(pid)
-    procs[pid] = p
-  }
-}
-
-func DisplayProcessList(procs map[int]*Process, factor float32){
-  for k, v := range procs{
-    if v.Dirty == false{
-
-      fmt.Println(k, v, (1. / factor * float32(v.TimeCur - v . TimePrev)))
+  for _, v := range procs{
+    if v.Dirty == false && v.Active == true{
+      if v.TimeCur - v.TimePrev > 0{
+        usage := 1. / factor * float32(v.TimeCur - v.TimePrev)
+        copy_proc := proc.Process{v.Pid, 0,0,false, false, usage}
+        m_display = append(m_display, copy_proc)
+      }
     }
   }
+
+  sort.Sort(proc.ByUsage(m_display))
+
+  if len(m_display) > 0 {
+    fmt.Printf("\033[2J")
+    for i := 0; i < max; i++ {
+        fmt.Printf("pid: %d \t\t usage: %.2f\n", m_display[i].Pid, m_display[i].Usage)
+    }
+    
+  }
+
 }
 
-func MarkDirtyProcessList(procs map[int]*Process){
+func MarkDirtyProcessList(procs map[int]*proc.Process){
   for k, _ := range procs{
     procs[k].Dirty = true
+    procs[k].Active = false
   }
 }
 
 func main(){
 
-  m = make(map[int]*Process)
+  m = make(map[int]*proc.Process)
 
   cpu_tick_prev := int64(0)
   cpu_tick_cur := int64(0)
@@ -77,17 +53,29 @@ func main(){
 
   for{
     MarkDirtyProcessList(m)
+
     cpu_tick_cur = proc.CpuTick()
-    UpdateProcessList(m)
-    time.Sleep(3 * time.Second)
+    proc.UpdateProcessList(m)
+
+    factor := float32(cpu_tick_cur - cpu_tick_prev) / float32(cores) / 100.
+    DisplayProcessList(m, factor, 10)
 
     cpu_tick_prev = cpu_tick_cur
-    cpu_tick_cur = proc.CpuTick()
-    factor := float32(cpu_tick_cur - cpu_tick_prev) / float32(cores) / 100.
+    time.Sleep(3 * time.Second)
 
-    DisplayProcessList(m, factor)
+
   }
 
+/**/
+  // t_p := proc.TimeFromPid(20251)
+  // for{
+  //   time.Sleep(3 * time.Second)
+  //   t_c := proc.TimeFromPid(20251)
+  //   fmt.Println(1. / 3. * float32(t_c - t_p))
+  //   t_p = t_c
+  // }
+
+/**/
   // fmt.Println(proc.CpuTick())
   // fmt.Println(proc.NumCores())
   // fmt.Println(proc.TimeFromPid(20251))
